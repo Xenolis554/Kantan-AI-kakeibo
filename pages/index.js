@@ -97,6 +97,7 @@ export default function Home() {
   const [scanLoading, setScanLoading] = useState(false);
   const [scanStatus, setScanStatus] = useState('');
   const [scanError, setScanError] = useState('');
+  const [scanSuccess, setScanSuccess] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
 
@@ -318,6 +319,7 @@ export default function Home() {
     setScanLoading(true);
     setScanStatus('画像を準備しています...');
     setScanError('');
+    setScanSuccess('');
     let timeoutId;
 
     try {
@@ -375,6 +377,9 @@ export default function Home() {
       if (!response.ok) throw new Error(result.error || '画像の解析に失敗しました。');
 
       const parsed = result.data;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(parsed.transaction_date)) {
+        throw new Error('AIが読み取った日付の形式が正しくありません。');
+      }
       setScanStatus('解析結果を保存しています...');
       const { data: insertedTx, error: txError } = await supabase
         .from('transactions')
@@ -407,6 +412,8 @@ export default function Home() {
       setSelectedFile(null);
       setPreviewUrl(null);
       setScanStatus('');
+      setSelectedMonth(parsed.transaction_date.slice(0, 7));
+      setScanSuccess(`${parsed.merchant}の${Number(parsed.amount).toLocaleString()}円を登録しました。`);
       await fetchTransactions(user.id);
     } catch (err) {
       setScanError(
@@ -631,6 +638,12 @@ export default function Home() {
 
       {/* メインエリア */}
       <main className="flex-1 p-6 sm:p-8 md:p-10 space-y-8 overflow-y-auto max-w-7xl mx-auto w-full">
+        {scanSuccess && (
+          <div role="status" className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
+            <CheckCircle2 size={17} />
+            {scanSuccess}
+          </div>
+        )}
         <section className="bg-gradient-to-r from-rose-50 via-white to-sky-50 border border-slate-200/80 rounded-2xl p-5 sm:p-6 shadow-sm">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
