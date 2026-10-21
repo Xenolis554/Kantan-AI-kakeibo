@@ -22,6 +22,7 @@
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Supabaseの公開Anon key
    - `SUPABASE_SERVICE_ROLE_KEY`: SupabaseのService role key（サーバー側だけで使用）
    - `GEMINI_API_KEY`: Google AI Studioで発行したGemini API key（サーバー側だけで使用）
+   - `GEMINI_MODEL`: 使用するGeminiモデル（省略時は`gemini-flash-latest`）
 
    `.env.local` はGitにコミットしないでください。Service role keyとGemini API keyは、ブラウザ側のコードや公開リポジトリに絶対に書かないでください。
 

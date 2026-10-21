@@ -7,6 +7,7 @@ export const config = {
 
 const DAILY_PARSE_LIMIT = 10;
 const MAX_RETRIES = 3;
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-flash-latest';
 
 const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
@@ -78,7 +79,7 @@ export default async function handler(req, res) {
       for (let attempt = 0; attempt < MAX_RETRIES; attempt += 1) {
         try {
           response = await ai.models.generateContent({
-            model: 'gemini-3.8-flash',
+            model: GEMINI_MODEL,
             contents: [
               {
                 inlineData: {
