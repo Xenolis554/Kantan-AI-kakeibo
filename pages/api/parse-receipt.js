@@ -8,6 +8,7 @@ export const config = {
 const DAILY_PARSE_LIMIT = 10;
 const MAX_RETRIES = 3;
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-flash-latest';
+const FALLBACK_MODEL = 'gemini-3.7-flash';
 
 const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
@@ -19,6 +20,23 @@ const isRetryableError = (error) => {
     || status === 'UNAVAILABLE'
     || status === 'RESOURCE_EXHAUSTED'
     || /503|429|UNAVAILABLE|RESOURCE_EXHAUSTED/i.test(message);
+};
+
+const parseModelResponse = (text) => {
+  const normalized = text.trim().replace(/^```json\s*/i, '').replace(/```$/i, '').trim();
+  const parsed = JSON.parse(normalized);
+  if (
+    !parsed
+    || !['expense', 'income'].includes(parsed.type)
+    || typeof parsed.category !== 'string'
+    || typeof parsed.amount !== 'number'
+    || typeof parsed.merchant !== 'string'
+    || typeof parsed.transaction_date !== 'string'
+    || !Array.isArray(parsed.items)
+  ) {
+    throw new Error('AIの解析結果の形式が正しくありません。');
+  }
+  return parsed;
 };
 
 export default async function handler(req, res) {
@@ -75,11 +93,16 @@ export default async function handler(req, res) {
       }
 
       const ai = new GoogleGenAI({ apiKey });
-      let response;
+    const models = GEMINI_MODEL === FALLBACK_MODEL
+      ? [GEMINI_MODEL]
+      : [GEMINI_MODEL, FALLBACK_MODEL];
+    let parsed;
+    let lastError;
+    for (const model of models) {
       for (let attempt = 0; attempt < MAX_RETRIES; attempt += 1) {
         try {
-          response = await ai.models.generateContent({
-            model: GEMINI_MODEL,
+          const response = await ai.models.generateContent({
+            model,
             contents: [
               {
                 inlineData: {
@@ -87,34 +110,45 @@ export default async function handler(req, res) {
                   mimeType: mimeType || 'image/jpeg',
                 },
               },
-              `レシートまたはクレジットカード利用明細の画像を解析し、説明文なしで次のJSONだけを返してください。
+              `画像の内容を読み取り、JSONオブジェクトだけを返してください。Markdownのコードブロックや説明文は不要です。
 {"type":"expense","category":"食費","amount":0,"merchant":"","transaction_date":"YYYY-MM-DD","items":[{"name":"","amount":0}]}
 支出の category は食費、日用品、衣類・ファッション、住居費、水道光熱費、通信費、交通費、医療費、保険、教育・学習、娯楽・レジャー、美容・理容、交際費、税金・社会保険、サブスクリプション、手数料、その他から選んでください。
 クレジットカード利用明細の場合も、クレジットカードは決済手段でありカテゴリにはしないでください。明細の店舗名、利用先、摘要、商品名などから、実際の支出内容に最も近い category を判断してください。判断できない場合だけその他を選んでください。
 給与や入金明細は type を income にし、category は給与・収入、賞与、副業収入、臨時収入、その他収入から選んでください。`,
             ],
+            config: {
+              responseMimeType: 'application/json',
+            },
           });
+          parsed = parseModelResponse(response.text || '');
           break;
         } catch (error) {
+          lastError = error;
           if (!isRetryableError(error) || attempt === MAX_RETRIES - 1) {
-            if (isRetryableError(error)) {
-              return res.status(503).json({
-                error: 'AIサービスが混雑しています。時間をおいてもう一度お試しください。',
-              });
-            }
-            throw error;
+            break;
           }
           const delay = 1000 * (2 ** attempt) + Math.floor(Math.random() * 500);
           await wait(delay);
         }
       }
-
-    const match = (response.text || '').match(/\{[\s\S]*\}/);
-    if (!match) {
-      return res.status(502).json({ error: 'AIの応答からJSONを抽出できませんでした。' });
+      if (parsed) break;
     }
 
-    return res.status(200).json({ success: true, data: JSON.parse(match[0]) });
+    if (!parsed) {
+      if (isRetryableError(lastError)) {
+        return res.status(503).json({
+          error: 'AIサービスが混雑しています。時間をおいてもう一度お試しください。',
+        });
+      }
+      console.error('Receipt parse response error:', lastError);
+      return res.status(502).json({
+        error: lastError instanceof Error
+          ? lastError.message
+          : 'AIの解析結果を読み取れませんでした。',
+      });
+    }
+
+    return res.status(200).json({ success: true, data: parsed });
   } catch (error) {
     console.error('Receipt parsing API error:', error);
     return res.status(500).json({
