@@ -6,9 +6,9 @@ export const config = {
 };
 
 const DAILY_PARSE_LIMIT = 10;
-const MAX_RETRIES = 3;
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-flash-latest';
-const FALLBACK_MODEL = 'gemini-3.7-flash';
+const MAX_RETRIES = 1;
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite';
+const FALLBACK_MODEL = 'gemini-flash-lite-latest';
 
 const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
@@ -124,7 +124,10 @@ export default async function handler(req, res) {
           break;
         } catch (error) {
           lastError = error;
-          if (!isRetryableError(error) || attempt === MAX_RETRIES - 1) {
+          if (!isRetryableError(error)) {
+            break;
+          }
+          if (attempt === MAX_RETRIES - 1) {
             break;
           }
           const delay = 1000 * (2 ** attempt) + Math.floor(Math.random() * 500);

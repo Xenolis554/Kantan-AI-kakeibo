@@ -318,6 +318,7 @@ export default function Home() {
     setScanLoading(true);
     setScanStatus('画像を準備しています...');
     setScanError('');
+    let timeoutId;
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -346,7 +347,7 @@ export default function Home() {
       });
       setScanStatus('AIがレシートを解析しています...');
       const controller = new AbortController();
-      const timeoutId = window.setTimeout(() => controller.abort(), 45000);
+      timeoutId = window.setTimeout(() => controller.abort(), 30000);
       const response = await fetch('/api/parse-receipt', {
         method: 'POST',
         signal: controller.signal,
@@ -416,6 +417,7 @@ export default function Home() {
             : '画像の解析に失敗しました。'
       );
     } finally {
+      if (timeoutId) window.clearTimeout(timeoutId);
       setScanLoading(false);
       setScanStatus('');
     }
@@ -1017,7 +1019,7 @@ export default function Home() {
                   <div>
                     <p className="text-sm font-semibold text-sky-900">{scanStatus || '解析しています...'}</p>
                     <p className="text-[11px] text-sky-700 mt-1">
-                      画面を閉じずにお待ちください（最大45秒）
+                      画面を閉じずにお待ちください（最大30秒）
                     </p>
                   </div>
                 </div>
