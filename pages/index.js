@@ -95,6 +95,7 @@ export default function Home() {
     passwordConfirmation: '',
   });
   const [scanLoading, setScanLoading] = useState(false);
+  const [scanStatus, setScanStatus] = useState('');
   const [scanError, setScanError] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
@@ -315,12 +316,14 @@ export default function Home() {
   const handleScanSubmit = async () => {
     if (!selectedFile || scanLoading) return;
     setScanLoading(true);
+    setScanStatus('画像を準備しています...');
     setScanError('');
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('ログイン状態を確認できません。');
 
+      setScanStatus('画像を圧縮しています...');
       const { imageBase64, mimeType } = await new Promise((resolve, reject) => {
         const image = new Image();
         const reader = new FileReader();
@@ -341,8 +344,12 @@ export default function Home() {
         reader.onerror = () => reject(new Error('画像の読み込みに失敗しました。'));
         reader.readAsDataURL(selectedFile);
       });
+      setScanStatus('AIがレシートを解析しています...');
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 45000);
       const response = await fetch('/api/parse-receipt', {
         method: 'POST',
+        signal: controller.signal,
         headers: {
           Authorization: `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',
@@ -352,6 +359,7 @@ export default function Home() {
           mimeType,
         }),
       });
+      window.clearTimeout(timeoutId);
       const responseText = await response.text();
       let result;
       try {
@@ -366,6 +374,7 @@ export default function Home() {
       if (!response.ok) throw new Error(result.error || '画像の解析に失敗しました。');
 
       const parsed = result.data;
+      setScanStatus('解析結果を保存しています...');
       const { data: insertedTx, error: txError } = await supabase
         .from('transactions')
         .insert([{
@@ -396,11 +405,19 @@ export default function Home() {
       setIsScanOpen(false);
       setSelectedFile(null);
       setPreviewUrl(null);
+      setScanStatus('');
       await fetchTransactions(user.id);
     } catch (err) {
-      setScanError(err instanceof Error ? err.message : '解析中にエラーが発生しました。');
+      setScanError(
+        err?.name === 'AbortError'
+          ? '解析に時間がかかっているため中断しました。画像を小さくするか、時間をおいて再度お試しください。'
+          : err instanceof Error
+            ? err.message
+            : '画像の解析に失敗しました。'
+      );
     } finally {
       setScanLoading(false);
+      setScanStatus('');
     }
   };
 
@@ -973,7 +990,7 @@ export default function Home() {
                   レシート、公共料金、給料明細の画像をアップロード
                 </p>
               </div>
-              <button onClick={() => setIsScanOpen(false)} className="text-slate-400 hover:text-slate-600">
+              <button onClick={() => setIsScanOpen(false)} disabled={scanLoading} className="text-slate-400 hover:text-slate-600 disabled:opacity-50">
                 <X size={18} />
               </button>
             </div>
@@ -993,11 +1010,29 @@ export default function Home() {
               </div>
             )}
 
+            {scanLoading && (
+              <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4" role="status" aria-live="polite">
+                <div className="flex items-center gap-3">
+                  <Loader2 className="shrink-0 animate-spin text-sky-600" size={22} />
+                  <div>
+                    <p className="text-sm font-semibold text-sky-900">{scanStatus || '解析しています...'}</p>
+                    <p className="text-[11px] text-sky-700 mt-1">
+                      画面を閉じずにお待ちください（最大45秒）
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-sky-100">
+                  <div className="h-full w-1/3 animate-pulse rounded-full bg-sky-500" />
+                </div>
+              </div>
+            )}
+
             <div className="flex justify-end gap-2 pt-2">
-              <button onClick={() => setIsScanOpen(false)} className="px-4 py-2 border border-slate-200 text-xs font-medium rounded-xl hover:bg-slate-50">
+              <button onClick={() => setIsScanOpen(false)} disabled={scanLoading} className="px-4 py-2 border border-slate-200 text-xs font-medium rounded-xl hover:bg-slate-50 disabled:opacity-50">
                 キャンセル
               </button>
               <button type="button" onClick={handleScanSubmit} disabled={scanLoading || !selectedFile} className="px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-xl hover:bg-slate-800 disabled:opacity-50 flex items-center gap-1.5">
+                {scanLoading && <Loader2 size={14} className="animate-spin" />}
                 {scanLoading ? '解析中...' : '解析して保存'}
               </button>
             </div>
