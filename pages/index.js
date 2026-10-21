@@ -8,15 +8,17 @@ import {
   INCOME_CATEGORIES,
 } from '../lib/dashboardConstants';
 import { formatDateKey, getCurrentMonth, getWeatherInfo } from '../lib/dashboardUtils';
+import WeatherBanner from '../components/WeatherBanner';
+import SummaryCards from '../components/SummaryCards';
+import PeriodNavigator from '../components/PeriodNavigator';
+import ChartsSection from '../components/ChartsSection';
+import TransactionsTable from '../components/TransactionsTable';
+import ReceiptScanModal from '../components/ReceiptScanModal';
+import ManualTransactionModal from '../components/ManualTransactionModal';
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend, CartesianGrid
-} from 'recharts';
-import {
-  Upload, Plus, LogOut, FileText, Calendar, DollarSign, Tag, Trash2,
-  ArrowUpRight, ArrowDownRight, ShoppingBag, Utensils, Car, Zap,
-  Briefcase, HelpCircle, Sparkles, X, CheckCircle2, ChevronRight, ChevronLeft, PiggyBank,
-  MapPin, Loader2
-  , Settings, User, Mail, KeyRound, AlertTriangle
+  Plus, LogOut, ShoppingBag, Utensils, Car, Zap,
+  Briefcase, HelpCircle, Sparkles, X, CheckCircle2, PiggyBank,
+  Settings, User, Mail, KeyRound, AlertTriangle
 } from 'lucide-react';
 
 export default function Home() {
@@ -488,7 +490,6 @@ export default function Home() {
     weekday: 'short',
   }).format(new Date());
   const weatherInfo = weather.code === null ? null : getWeatherInfo(weather.code);
-  const WeatherIcon = weatherInfo?.Icon;
   const moveMonth = (amount) => {
     const [year, month] = selectedMonth.split('-').map(Number);
     const next = new Date(year, month - 1 + amount, 1);
@@ -589,542 +590,73 @@ export default function Home() {
             {scanSuccess}
           </div>
         )}
-        <section className="bg-gradient-to-r from-rose-50 via-white to-sky-50 border border-slate-200/80 rounded-2xl p-5 sm:p-6 shadow-sm">
-          <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <div className="flex items-center gap-2 text-sm font-semibold text-slate-500">
-                <Calendar size={16} className="text-rose-400" />
-                <span>今日 {todayLabel}</span>
-              </div>
-              <p className="mt-2 text-base font-medium text-slate-700">{dailyMessage}</p>
-            </div>
-            <div className="flex items-center gap-3 sm:min-w-52 sm:justify-end">
-              {weather.status === 'loading' && (
-                <>
-                  <Loader2 size={26} className="animate-spin text-sky-400" />
-                  <span className="text-sm text-slate-500">天気を読み込み中...</span>
-                </>
-              )}
-              {weather.status === 'ready' && weatherInfo && WeatherIcon && (
-                <>
-                  <WeatherIcon size={32} className={weatherInfo.color} />
-                  <div>
-                    <div className="flex items-center gap-1 text-xs font-semibold text-slate-400">
-                      <MapPin size={13} /> 現在地の天気
-                    </div>
-                    <div className="text-lg font-bold text-slate-800">
-                      {weatherInfo.label}・{weather.temperature}℃
-                    </div>
-                  </div>
-                </>
-              )}
-              {weather.status === 'error' && (
-                <>
-                  <MapPin size={25} className="text-slate-400" />
-                  <span className="text-sm text-slate-500">位置情報を許可すると天気を表示できます</span>
-                </>
-              )}
-            </div>
-          </div>
-        </section>
+        <WeatherBanner
+          todayLabel={todayLabel}
+          dailyMessage={dailyMessage}
+          weather={weather}
+          weatherInfo={weatherInfo}
+        />
 
-        <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <button
-              type="button"
-              onClick={() => moveMonth(-1)}
-              aria-label="前月を表示"
-              className="p-2 rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-colors"
-            >
-              <ChevronLeft size={20} />
-            </button>
-            <div className="text-center">
-              <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">表示期間</div>
-              <div className="flex items-center justify-center gap-2">
-                <select
-                  value={selectedMonth.slice(0, 4)}
-                  onChange={(event) => {
-                    const [, month] = selectedMonth.split('-');
-                    setSelectedMonth(`${event.target.value}-${month}`);
-                  }}
-                  aria-label="表示年"
-                  className="bg-transparent text-xl font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-200 rounded-lg"
-                >
-                  {availableYears.map((year) => (
-                    <option key={year} value={year}>{year}年</option>
-                  ))}
-                </select>
-                <span className="text-xl font-bold text-slate-900">{selectedMonth.slice(5)}月</span>
-              </div>
-              <p className="mt-1 text-xs text-slate-500">
-                {selectedMonthLabel}の登録件数: <span className="font-bold text-slate-700">{selectedMonthTransactions.length}件</span>
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => moveMonth(1)}
-              aria-label="翌月を表示"
-              className="p-2 rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-colors"
-            >
-              <ChevronRight size={20} />
-            </button>
-          </div>
-          <div className="h-32 mt-3">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={[{ label: selectedMonthLabel, income: totalIncome, expense: totalExpense }]} barCategoryGap="35%" margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                <XAxis dataKey="label" stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} />
-                <YAxis hide />
-                <Tooltip
-                  formatter={(value, name) => [`¥${Number(value).toLocaleString()}`, name === 'income' ? '収入' : '支出']}
-                  cursor={false}
-                  allowEscapeViewBox={{ x: true, y: true }}
-                  position={{ y: -8 }}
-                  wrapperStyle={{ zIndex: 10, pointerEvents: 'none' }}
-                  contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0', borderRadius: '12px', boxShadow: '0 4px 12px rgba(15, 23, 42, 0.08)' }}
-                />
-                <Bar dataKey="income" name="収入" fill="#10b981" radius={[5, 5, 0, 0]} maxBarSize={42} />
-                <Bar dataKey="expense" name="支出" fill="#f43f5e" radius={[5, 5, 0, 0]} maxBarSize={42} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="flex justify-center gap-4 text-xs text-slate-500">
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" />収入</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rose-500" />支出</span>
-          </div>
-        </div>
+        <PeriodNavigator
+          selectedMonth={selectedMonth}
+          selectedMonthLabel={selectedMonthLabel}
+          availableYears={availableYears}
+          selectedMonthTransactionCount={selectedMonthTransactions.length}
+          totalIncome={totalIncome}
+          totalExpense={totalExpense}
+          onMoveMonth={moveMonth}
+          onYearChange={(year) => {
+            const [, month] = selectedMonth.split('-');
+            setSelectedMonth(`${year}-${month}`);
+          }}
+        />
         
         {/* サマリーカード */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-          <div className="bg-white border border-slate-200/80 p-6 rounded-2xl shadow-sm">
-            <div className="flex items-center justify-between text-xs font-medium text-slate-500 mb-2">
-              <span className="text-sm">総支出</span>
-              <div className="p-1.5 bg-rose-50 rounded-lg text-rose-500">
-                <ArrowDownRight size={16} />
-              </div>
-            </div>
-            <div className="text-3xl font-bold font-mono tracking-tight text-slate-900">
-              ¥{totalExpense.toLocaleString()}
-            </div>
-            <div className="text-xs text-slate-400 mt-1">支出合計</div>
-          </div>
+        <SummaryCards totalIncome={totalIncome} totalExpense={totalExpense} />
 
-          <div className="bg-white border border-slate-200/80 p-6 rounded-2xl shadow-sm">
-            <div className="flex items-center justify-between text-xs font-medium text-slate-500 mb-2">
-              <span className="text-sm">総収入</span>
-              <div className="p-1.5 bg-emerald-50 rounded-lg text-emerald-600">
-                <ArrowUpRight size={16} />
-              </div>
-            </div>
-            <div className="text-3xl font-bold font-mono tracking-tight text-slate-900">
-              ¥{totalIncome.toLocaleString()}
-            </div>
-            <div className="text-xs text-slate-400 mt-1">収入合計</div>
-          </div>
+        <ChartsSection
+          categoryData={categoryData}
+          trendData={trendData}
+          timeframe={timeframe}
+          chartColors={CHART_COLORS}
+          onTimeframeChange={setTimeframe}
+        />
 
-          <div className="bg-white border border-slate-200/80 p-6 rounded-2xl shadow-sm">
-            <div className="flex items-center justify-between text-xs font-medium text-slate-500 mb-2">
-              <span className="text-sm">収支バランス</span>
-              <span className="text-xs bg-slate-100 px-2 py-0.5 rounded-full font-mono text-slate-600">NET</span>
-            </div>
-            <div className={`text-3xl font-bold font-mono tracking-tight ${totalIncome - totalExpense < 0 ? 'text-rose-600' : 'text-slate-900'}`}>
-              ¥{(totalIncome - totalExpense).toLocaleString()}
-            </div>
-            <div className="text-xs text-slate-400 mt-1">
-              収支差額 / 収入・支出比 {totalExpense > 0 ? `${(totalIncome / totalExpense).toFixed(2)}倍` : totalIncome > 0 ? '支出なし' : '—'}
-            </div>
-          </div>
-        </div>
-
-        {/* グラフエリア */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-white border border-slate-200/80 p-6 rounded-2xl shadow-sm">
-            <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-6">カテゴリ別支出構成</h2>
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={categoryData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={85} paddingAngle={2}>
-                    {categoryData.map((_, index) => (
-                      <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    allowEscapeViewBox={{ x: true, y: true }}
-                    wrapperStyle={{ zIndex: 10, pointerEvents: 'none' }}
-                    contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            {categoryData.length > 0 && (
-              <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
-                {categoryData.map((category, index) => (
-                  <div key={category.name} className="flex items-center justify-between gap-3 text-sm">
-                    <span className="flex items-center gap-2 text-slate-600 min-w-0">
-                      <span
-                        className="w-2.5 h-2.5 rounded-full shrink-0"
-                        style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}
-                      />
-                      <span className="truncate">{category.name}</span>
-                    </span>
-                    <span className="font-mono font-medium text-slate-700 shrink-0">
-                      ¥{category.value.toLocaleString()}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="bg-white border border-slate-200/80 p-6 rounded-2xl shadow-sm">
-            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-5">
-              <div>
-                <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider">収支トレンド</h2>
-                <p className="text-xs text-slate-400 mt-1">選択中の月の支出推移</p>
-              </div>
-              <div className="flex gap-1 bg-slate-100 p-1 rounded-lg self-start sm:self-auto">
-                {[
-                  { value: 'day', label: '日別' },
-                  { value: 'week', label: '週別' },
-                ].map(({ value, label }) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setTimeframe(value)}
-                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${timeframe === value ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="h-64">
-              {trendData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={trendData} barCategoryGap="35%" margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                    <XAxis dataKey="label" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
-                    <YAxis
-                      stroke="#94a3b8"
-                      fontSize={11}
-                      tickLine={false}
-                      axisLine={false}
-                      tickFormatter={(value) => `¥${value.toLocaleString()}`}
-                    />
-                    <Tooltip
-                      formatter={(value, name) => [`¥${Number(value).toLocaleString()}`, name === 'income' ? '収入' : '支出']}
-                      labelFormatter={(label) => `${label}`}
-                      cursor={false}
-                      allowEscapeViewBox={{ x: true, y: true }}
-                      position={{ y: -8 }}
-                      wrapperStyle={{ zIndex: 10, pointerEvents: 'none' }}
-                      contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
-                    />
-                    <Legend
-                      formatter={() => '支出'}
-                      wrapperStyle={{ fontSize: '11px' }}
-                    />
-                    <Bar dataKey="expense" fill="#f43f5e" radius={[6, 6, 0, 0]} maxBarSize={32} />
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-full flex items-center justify-center text-xs text-slate-400">
-                  取引データがありません
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* 明細テーブル */}
-        <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider">最新の明細・取引履歴</h2>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-slate-400 font-mono">{selectedMonthTransactions.length} 件</span>
-              <label className="flex items-center gap-1 text-[10px] text-slate-400">
-                <span className="sr-only">1ページの表示件数</span>
-                <select
-                  value={transactionsPerPage}
-                  onChange={(event) => setTransactionsPerPage(Number(event.target.value))}
-                  className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-600 focus:outline-none focus:ring-1 focus:ring-slate-900"
-                  aria-label="1ページの表示件数"
-                >
-                  <option value={10}>10件</option>
-                  <option value={20}>20件</option>
-                  <option value={50}>50件</option>
-                </select>
-              </label>
-              {transactionPageCount > 1 && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setTransactionPage((page) => Math.max(1, page - 1))}
-                    disabled={transactionPage === 1}
-                    className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40"
-                    aria-label="前の明細ページ"
-                  >
-                    <ChevronLeft size={14} />
-                  </button>
-                  <span className="text-[10px] text-slate-400 font-mono min-w-8 text-center">
-                    {transactionPage}/{transactionPageCount}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setTransactionPage((page) => Math.min(transactionPageCount, page + 1))}
-                    disabled={transactionPage === transactionPageCount}
-                    className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40"
-                    aria-label="次の明細ページ"
-                  >
-                    <ChevronRight size={14} />
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-slate-100 text-slate-400 font-semibold text-sm">
-                  <th className="pb-3 pl-2">日付</th>
-                  <th className="pb-3">種別</th>
-                  <th className="pb-3">店舗 / 発行元</th>
-                  <th className="pb-3">カテゴリ</th>
-                  <th className="pb-3 text-right pr-4">金額</th>
-                  <th className="pb-3 text-center">操作</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {visibleTransactions.map((t) => (
-                  <tr
-                    key={t.id}
-                    className={`transition-colors ${
-                      t.type === 'income'
-                        ? 'bg-emerald-50/60 hover:bg-emerald-100/70'
-                        : 'bg-rose-50/40 hover:bg-rose-100/60'
-                    }`}
-                  >
-                    <td className="py-4 pl-2 font-mono text-slate-500">{t.transaction_date}</td>
-                    <td className="py-3.5">
-                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${
-                        t.type === 'income'
-                          ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
-                          : 'bg-rose-100 text-rose-700 border border-rose-200'
-                      }`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${t.type === 'income' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                        {t.type === 'income' ? '収入' : '支出'}
-                      </span>
-                    </td>
-                    <td className="py-4 font-medium text-slate-900">{t.merchant || '-'}</td>
-                    <td className="py-4">
-                      <div className="flex items-center gap-1.5 text-slate-600">
-                        {getCategoryIcon(t.category)}
-                        <span>{t.category}</span>
-                      </div>
-                    </td>
-                    <td className={`py-4 text-right pr-4 font-mono font-bold text-sm ${t.type === 'income' ? 'text-emerald-700' : 'text-rose-700'}`}>
-                      {t.type === 'income' ? '+' : '-'}¥{Number(t.amount).toLocaleString()}
-                    </td>
-                    <td className="py-4 text-center">
-                      <button onClick={() => handleDelete(t.id)} className="text-slate-300 hover:text-rose-600 transition-colors">
-                        <Trash2 size={15} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {transactionPageCount > 1 && (
-            <div className="flex items-center justify-center gap-3 mt-5">
-              <button
-                type="button"
-                onClick={() => setTransactionPage((page) => Math.max(1, page - 1))}
-                disabled={transactionPage === 1}
-                className="p-2 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40"
-                aria-label="前の明細ページ"
-              >
-                <ChevronLeft size={16} />
-              </button>
-              <span className="text-xs text-slate-500 font-mono">
-                {transactionPage} / {transactionPageCount}
-              </span>
-              <button
-                type="button"
-                onClick={() => setTransactionPage((page) => Math.min(transactionPageCount, page + 1))}
-                disabled={transactionPage === transactionPageCount}
-                className="p-2 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40"
-                aria-label="次の明細ページ"
-              >
-                <ChevronRight size={16} />
-              </button>
-            </div>
-          )}
-        </div>
+        <TransactionsTable
+          transactions={visibleTransactions}
+          totalCount={selectedMonthTransactions.length}
+          page={transactionPage}
+          pageCount={transactionPageCount}
+          perPage={transactionsPerPage}
+          onPageChange={setTransactionPage}
+          onPerPageChange={setTransactionsPerPage}
+          onDelete={handleDelete}
+          getCategoryIcon={getCategoryIcon}
+        />
       </main>
 
-      {/* AIスキャンモーダル */}
       {isScanOpen && (
-        <div className="fixed inset-0 overflow-y-auto bg-slate-900/40 backdrop-blur-sm p-4 z-50">
-          <div className="min-h-full flex items-center justify-center">
-            <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-2xl relative space-y-5">
-            <div className="flex justify-between items-start">
-              <div>
-                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                  <Sparkles className="text-slate-900" size={18} /> AIスキャン自動解析
-                </h3>
-                <p className="text-xs text-slate-500 mt-1">
-                  レシート、公共料金、給料明細の画像をアップロード
-                </p>
-              </div>
-              <button onClick={() => setIsScanOpen(false)} disabled={scanLoading} className="text-slate-400 hover:text-slate-600 disabled:opacity-50">
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="border-2 border-dashed border-slate-200 rounded-2xl p-6 text-center hover:border-slate-400 transition-all bg-slate-50">
-              <input type="file" accept="image/*" onChange={handleFileChange} className="hidden" id="file-upload" />
-              <label htmlFor="file-upload" className="cursor-pointer flex flex-col items-center">
-                <Upload className="text-slate-400 mb-2" size={24} />
-                <span className="text-xs font-medium text-slate-700">画像ファイルを選択</span>
-                <span className="text-[10px] text-slate-400 mt-1">PNG, JPG, WEBP 対応</span>
-              </label>
-            </div>
-
-            {previewUrl && (
-              <div className="relative h-40 w-full border border-slate-200 rounded-xl overflow-hidden bg-slate-50">
-                <img src={previewUrl} alt="Preview" className="object-contain w-full h-full" />
-              </div>
-            )}
-
-            {scanLoading && (
-              <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4" role="status" aria-live="polite">
-                <div className="flex items-center gap-3">
-                  <Loader2 className="shrink-0 animate-spin text-sky-600" size={22} />
-                  <div>
-                    <p className="text-sm font-semibold text-sky-900">{scanStatus || '解析しています...'}</p>
-                    <p className="text-[11px] text-sky-700 mt-1">
-                      画面を閉じずにお待ちください（最大30秒）
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-sky-100">
-                  <div className="h-full w-1/3 animate-pulse rounded-full bg-sky-500" />
-                </div>
-              </div>
-            )}
-
-            <div className="flex justify-end gap-2 pt-2">
-              <button onClick={() => setIsScanOpen(false)} disabled={scanLoading} className="px-4 py-2 border border-slate-200 text-xs font-medium rounded-xl hover:bg-slate-50 disabled:opacity-50">
-                キャンセル
-              </button>
-              <button type="button" onClick={handleScanSubmit} disabled={scanLoading || !selectedFile} className="px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-xl hover:bg-slate-800 disabled:opacity-50 flex items-center gap-1.5">
-                {scanLoading && <Loader2 size={14} className="animate-spin" />}
-                {scanLoading ? '解析中...' : '解析して保存'}
-              </button>
-            </div>
-            {scanError && (
-              <p role="alert" className="text-xs text-rose-600 bg-rose-50 border border-rose-100 rounded-xl p-3">
-                {scanError}
-              </p>
-            )}
-            </div>
-          </div>
-        </div>
+        <ReceiptScanModal
+          previewUrl={previewUrl}
+          scanLoading={scanLoading}
+          scanStatus={scanStatus}
+          scanError={scanError}
+          selectedFile={selectedFile}
+          onFileChange={handleFileChange}
+          onSubmit={handleScanSubmit}
+          onClose={() => setIsScanOpen(false)}
+        />
       )}
 
-      {/* 手動入力モーダル */}
       {isManualOpen && (
-        <div className="fixed inset-0 overflow-y-auto bg-slate-900/40 backdrop-blur-sm p-4 z-50">
-          <div className="min-h-full flex items-center justify-center">
-            <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-2xl relative space-y-4">
-            <div className="flex justify-between items-center">
-              <h3 className="text-base font-bold text-slate-900">手動でデータを追加</h3>
-              <button onClick={() => setIsManualOpen(false)} className="text-slate-400 hover:text-slate-600">
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleManualSubmit} className="space-y-3 text-xs">
-              <div>
-                <label className="block text-slate-500 mb-1 font-medium">種別</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {['expense', 'income'].map((type) => (
-                    <button
-                      key={type}
-                      type="button"
-                      onClick={() => setManualForm({
-                        ...manualForm,
-                        type,
-                        category: type === 'expense' ? EXPENSE_CATEGORIES[0] : INCOME_CATEGORIES[0],
-                      })}
-                      className={`py-2 rounded-xl border text-center font-semibold transition-all ${manualForm.type === type ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 text-slate-600'}`}
-                    >
-                      {type === 'expense' ? '支出' : '収入'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-slate-500 mb-1 font-medium">金額 (円)</label>
-                <input
-                  type="number"
-                  required
-                  value={manualForm.amount}
-                  onChange={(e) => setManualForm({ ...manualForm, amount: e.target.value })}
-                  placeholder="1200"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:bg-white focus:ring-2 focus:ring-slate-900"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-500 mb-1 font-medium">店舗 / 発行元</label>
-                <input
-                  type="text"
-                  value={manualForm.merchant}
-                  onChange={(e) => setManualForm({ ...manualForm, merchant: e.target.value })}
-                  placeholder="コンビニ、スーパーなど"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:bg-white focus:ring-2 focus:ring-slate-900"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-500 mb-1 font-medium">カテゴリ</label>
-                <select
-                  value={manualForm.category}
-                  onChange={(e) => setManualForm({ ...manualForm, category: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:bg-white focus:ring-2 focus:ring-slate-900"
-                >
-                  {(manualForm.type === 'expense' ? EXPENSE_CATEGORIES : INCOME_CATEGORIES).map((category) => (
-                    <option key={category} value={category}>{category}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-slate-500 mb-1 font-medium">日付</label>
-                <input
-                  type="date"
-                  value={manualForm.transaction_date}
-                  onChange={(e) => setManualForm({ ...manualForm, transaction_date: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:bg-white focus:ring-2 focus:ring-slate-900"
-                />
-              </div>
-
-              <div className="pt-2 flex justify-end gap-2">
-                <button type="button" onClick={() => setIsManualOpen(false)} className="px-4 py-2 border border-slate-200 font-medium rounded-xl hover:bg-slate-50">
-                  キャンセル
-                </button>
-                <button type="submit" className="px-4 py-2 bg-slate-900 text-white font-semibold rounded-xl hover:bg-slate-800">
-                  追加する
-                </button>
-              </div>
-            </form>
-            </div>
-          </div>
-        </div>
+        <ManualTransactionModal
+          form={manualForm}
+          expenseCategories={EXPENSE_CATEGORIES}
+          incomeCategories={INCOME_CATEGORIES}
+          onChange={setManualForm}
+          onSubmit={handleManualSubmit}
+          onClose={() => setIsManualOpen(false)}
+        />
       )}
 
       {isAccountOpen && (
