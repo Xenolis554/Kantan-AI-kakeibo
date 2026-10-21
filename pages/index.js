@@ -352,7 +352,17 @@ export default function Home() {
           mimeType,
         }),
       });
-      const result = await response.json();
+      const responseText = await response.text();
+      let result;
+      try {
+        result = JSON.parse(responseText);
+      } catch {
+        throw new Error(
+          response.status >= 500
+            ? '画像解析サーバーで一時的なエラーが発生しました。開発サーバーを再起動して、もう一度お試しください。'
+            : '画像解析サーバーから不正な応答が返されました。'
+        );
+      }
       if (!response.ok) throw new Error(result.error || '画像の解析に失敗しました。');
 
       const parsed = result.data;
