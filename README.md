@@ -8,6 +8,61 @@
 
 家計簿は継続して記録することが大切ですが、レシートの内容を毎回手入力する作業は負担になりやすく、記録を続けるうえでの課題になります。そこで、Gemini APIによるレシート画像の解析、Supabaseによるデータ管理、Next.jsによる画面構築を組み合わせ、入力の手間を減らしながら支出を振り返りやすいアプリを目指しました。
 
+## Supabaseの設定
+
+### 1. プロジェクトを作成する
+
+1. [Supabase](https://supabase.com/)にログインし、新しいプロジェクトを作成します。
+2. Supabase Dashboardの **Project Settings > API** を開き、次の値を控えます。
+   - **Project URL** → `NEXT_PUBLIC_SUPABASE_URL`
+   - **anon / public key** → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - **service_role key** → `SUPABASE_SERVICE_ROLE_KEY`
+3. `service_role key`はRLSを回避できる強い権限を持つため、ブラウザ側のコードやGitHubへ公開せず、サーバー側の環境変数だけで使用してください。
+
+### 2. テーブルとRLSを作成する
+
+Supabase Dashboardの **SQL Editor > New query** を開き、リポジトリの [`schema.sql`](./schema.sql) の内容を貼り付けて **Run** を実行します。
+
+このSQLでは、次のテーブルを作成します。
+
+- `transactions`: 支出・収入の基本情報
+- `transaction_items`: レシート内の明細
+
+どちらもユーザーごとのRow Level Security（RLS）を有効にしており、ログイン中のユーザーが自分のデータだけを取得・登録・変更・削除できる設定です。`transaction_items`は親の`transactions`が削除されたときに連動して削除されます。
+
+SQL実行後、 **Table Editor** で`transactions`と`transaction_items`が作成されていることを確認してください。アプリは旧形式の`expenses`テーブルを使用していません。
+
+### 3. Authenticationを設定する
+
+Dashboardの **Authentication > Providers > Email** で、メールアドレスとパスワードによるログインを有効にします。
+
+続けて **Authentication > URL Configuration** を設定します。
+
+- **Site URL**: ローカルでは `http://localhost:3000`
+- **Redirect URLs**: `http://localhost:3000/**`
+- 本番環境では、VercelなどにデプロイしたURLへ置き換え、必要なURLだけを登録します。
+
+パスワードリセットやメールアドレス変更では、Supabaseが送信するメール内のURLからアプリへ戻ります。URLが未登録だと、メール内リンクが正しく動作しない場合があります。
+
+### 4. Resendでメール送信を設定する
+
+このアプリの認証メール（確認メール、パスワードリセット、メールアドレス変更）は、Supabase AuthenticationのSMTPに [Resend](https://resend.com/) を接続して送信します。ResendのAPIをアプリから直接呼び出す構成ではありません。
+
+1. Resendでアカウントを作成します。
+2. **Domains** から送信元ドメインを追加し、表示されるDNSレコード（SPF、DKIMなど）をドメイン管理サービスに登録します。
+3. ドメインの認証が完了したら、Resendの **API Keys** で送信用のAPIキーを作成します。
+4. Supabase Dashboardの **Authentication > SMTP Settings** を開き、次のように入力します。
+   - **Enable Custom SMTP**: 有効
+   - **SMTP Host**: `smtp.resend.com`
+   - **SMTP Port**: `465`（接続できない場合は`587`）
+   - **SMTP User**: `resend`
+   - **SMTP Password**: Resendで作成したAPIキー
+   - **Sender email**: Resendで認証したドメインのメールアドレス（例: `noreply@example.com`）
+   - **Sender name**: アプリ名など任意の表示名
+5. SupabaseのSMTP設定画面にあるテスト送信機能で、メールが届くことを確認します。
+
+ResendのAPIキーは`.env.local`に追加する必要はありません。Supabase DashboardのSMTP設定にだけ保存してください。送信元ドメインのDNS認証が完了していない場合、メールが迷惑メールに入ったり、送信に失敗したりすることがあります。
+
 ## ローカルで起動する
 
 1. 依存関係をインストールします。
@@ -32,7 +87,7 @@
 
    `.env.local` はGitにコミットしないでください。Service role keyとGemini API keyは、ブラウザ側のコードや公開リポジトリに絶対に書かないでください。
 
-4. SupabaseのSQL Editorで [`schema.sql`](./schema.sql) を実行します。
+4. 上記のSupabase設定とResendのSMTP設定を完了します。
 
 5. 開発サーバーを起動します。
 
@@ -49,30 +104,6 @@ npm run seed:test -- <ユーザーID> [件数]
 ```
 
 件数を省略すると100件登録されます。件数は1〜1000件です。ユーザーIDはSupabase DashboardのAuthentication > Usersで確認できます。
-
-## GitHubへ公開する前の確認
-
-以下を実行し、秘密情報や生成物がステージされていないことを確認します。
-
-```bash
-git status --short
-git ls-files
-```
-
-特に、`.env.local`、`.env`、`node_modules/`、`.next/`、Service role key、Gemini API keyを含むファイルを追加しないでください。
-
-初回公開の例:
-
-```bash
-git add .gitignore .env.example README.md package.json package-lock.json pages lib schema.sql postcss.config.js tailwind.config.js styles
-git diff --cached --stat
-git diff --cached -- .env.local .env
-git commit -m "Initial public release"
-git remote add origin https://github.com/<your-account>/<your-repository>.git
-git push -u origin main
-```
-
-`git diff --cached -- .env.local .env` に出力があれば、コミットせずにステージから外してください。
 
 ## Vercelなどへデプロイする場合
 
