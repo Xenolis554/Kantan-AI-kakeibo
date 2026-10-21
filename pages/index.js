@@ -1,11 +1,5 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import {
-  TEST_ANALYSIS_RESULT,
-  TEST_INCOME_ANALYSIS_RESULT,
-  getRandomTestDate,
-  createTestExpenseRows,
-} from '../lib/testData';
 import { useRouter } from 'next/router';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend, CartesianGrid
@@ -102,7 +96,6 @@ export default function Home() {
   });
   const [scanLoading, setScanLoading] = useState(false);
   const [scanError, setScanError] = useState('');
-  const [scanTestType, setScanTestType] = useState('expense');
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
 
@@ -325,10 +318,24 @@ export default function Home() {
     setScanError('');
 
     try {
-      // APIを使わず、開発・デモ用の固定結果で登録する。
-      const parsed = scanTestType === 'income'
-        ? { ...TEST_INCOME_ANALYSIS_RESULT, transaction_date: getRandomTestDate() }
-        : { ...TEST_ANALYSIS_RESULT, transaction_date: getRandomTestDate() };
+      const imageBase64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error('画像の読み込みに失敗しました。'));
+        reader.readAsDataURL(selectedFile);
+      });
+      const response = await fetch('/api/parse-receipt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageBase64,
+          mimeType: selectedFile.type,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || '画像の解析に失敗しました。');
+
+      const parsed = result.data;
       const { data: insertedTx, error: txError } = await supabase
         .from('transactions')
         .insert([{
@@ -362,28 +369,6 @@ export default function Home() {
       await fetchTransactions(user.id);
     } catch (err) {
       setScanError(err instanceof Error ? err.message : '解析中にエラーが発生しました。');
-    } finally {
-      setScanLoading(false);
-    }
-  };
-
-  const handleBulkTestExpenses = async () => {
-    if (scanLoading) return;
-    setScanLoading(true);
-    setScanError('');
-
-    try {
-      const { error } = await supabase
-        .from('transactions')
-        .insert(createTestExpenseRows(user.id));
-      if (error) throw error;
-
-      setIsScanOpen(false);
-      setSelectedFile(null);
-      setPreviewUrl(null);
-      await fetchTransactions(user.id);
-    } catch (error) {
-      setScanError(error instanceof Error ? error.message : 'テストデータの登録に失敗しました。');
     } finally {
       setScanLoading(false);
     }
@@ -957,38 +942,6 @@ export default function Home() {
                 <p className="text-xs text-slate-500 mt-1">
                   レシート、公共料金、給料明細の画像をアップロード
                 </p>
-                <p className="text-[10px] text-amber-600 mt-1">
-                  テストモード：選択した固定結果を登録します
-                </p>
-                <div className="flex gap-2 mt-3">
-                  {[
-                    { value: 'expense', label: '支出テスト' },
-                    { value: 'income', label: '収入テスト' },
-                  ].map(({ value, label }) => (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => setScanTestType(value)}
-                      className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-all ${
-                        scanTestType === value
-                          ? value === 'income'
-                            ? 'bg-emerald-500 text-white'
-                            : 'bg-rose-500 text-white'
-                          : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-100'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                <button
-                  type="button"
-                  onClick={handleBulkTestExpenses}
-                  disabled={scanLoading}
-                  className="w-full mt-2 py-2 rounded-xl border border-amber-300 bg-amber-50 text-amber-700 text-xs font-semibold hover:bg-amber-100 disabled:opacity-50"
-                >
-                  {scanLoading ? '100件を登録中...' : '支出テストデータ100件を登録'}
-                </button>
               </div>
               <button onClick={() => setIsScanOpen(false)} className="text-slate-400 hover:text-slate-600">
                 <X size={18} />
@@ -1015,7 +968,7 @@ export default function Home() {
                 キャンセル
               </button>
               <button type="button" onClick={handleScanSubmit} disabled={scanLoading || !selectedFile} className="px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-xl hover:bg-slate-800 disabled:opacity-50 flex items-center gap-1.5">
-                {scanLoading ? '解析中...' : `${scanTestType === 'income' ? '収入' : '支出'}テストを保存`}
+                {scanLoading ? '解析中...' : '解析して保存'}
               </button>
             </div>
             {scanError && (

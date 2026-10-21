@@ -6,7 +6,8 @@
 "dev": "next dev",
 "build": "next build",
 "start": "next start",
-"lint": "next lint"
+"lint": "next lint",
+"seed:test": "node --env-file=.env.local scripts/seed-test-data.js"
 },
 "dependencies": {
 "@google/genai": "^2.28.0",
