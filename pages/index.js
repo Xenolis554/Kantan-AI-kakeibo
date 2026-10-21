@@ -318,18 +318,38 @@ export default function Home() {
     setScanError('');
 
     try {
-      const imageBase64 = await new Promise((resolve, reject) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('ログイン状態を確認できません。');
+
+      const { imageBase64, mimeType } = await new Promise((resolve, reject) => {
+        const image = new Image();
         const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
+        reader.onload = () => {
+          image.onload = () => {
+            const maxDimension = 1600;
+            const scale = Math.min(1, maxDimension / Math.max(image.naturalWidth, image.naturalHeight));
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+            canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+            canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+            resolve({ imageBase64: dataUrl, mimeType: 'image/jpeg' });
+          };
+          image.onerror = () => reject(new Error('画像の読み込みに失敗しました。'));
+          image.src = reader.result;
+        };
         reader.onerror = () => reject(new Error('画像の読み込みに失敗しました。'));
         reader.readAsDataURL(selectedFile);
       });
       const response = await fetch('/api/parse-receipt', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
           imageBase64,
-          mimeType: selectedFile.type,
+          mimeType,
         }),
       });
       const result = await response.json();
