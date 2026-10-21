@@ -412,7 +412,6 @@ export default function Home() {
       setSelectedFile(null);
       setPreviewUrl(null);
       setScanStatus('');
-      setSelectedMonth(parsed.transaction_date.slice(0, 7));
       setScanSuccess(`${parsed.merchant}の${Number(parsed.amount).toLocaleString()}円を登録しました。`);
       await fetchTransactions(user.id);
     } catch (err) {
@@ -521,6 +520,14 @@ export default function Home() {
   }, []).sort((a, b) => a.key.localeCompare(b.key)).slice(-12);
 
   const selectedMonthLabel = selectedMonth.replace('-', '年') + '月';
+  const currentYear = new Date().getFullYear();
+  const transactionYears = transactions
+    .map((transaction) => transaction.transaction_date?.slice(0, 4))
+    .filter((year) => /^\d{4}$/.test(year))
+    .map(Number);
+  const availableYears = Array.from(
+    new Set([currentYear - 5, currentYear - 4, currentYear - 3, currentYear - 2, currentYear - 1, currentYear, ...transactionYears])
+  ).sort((a, b) => b - a);
   const todayLabel = new Intl.DateTimeFormat('ja-JP', {
     year: 'numeric',
     month: 'long',
@@ -695,7 +702,25 @@ export default function Home() {
             </button>
             <div className="text-center">
               <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">表示期間</div>
-              <div className="text-xl font-bold text-slate-900">{selectedMonthLabel}</div>
+              <div className="flex items-center justify-center gap-2">
+                <select
+                  value={selectedMonth.slice(0, 4)}
+                  onChange={(event) => {
+                    const [, month] = selectedMonth.split('-');
+                    setSelectedMonth(`${event.target.value}-${month}`);
+                  }}
+                  aria-label="表示年"
+                  className="bg-transparent text-xl font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-200 rounded-lg"
+                >
+                  {availableYears.map((year) => (
+                    <option key={year} value={year}>{year}年</option>
+                  ))}
+                </select>
+                <span className="text-xl font-bold text-slate-900">{selectedMonth.slice(5)}月</span>
+              </div>
+              <p className="mt-1 text-xs text-slate-500">
+                {selectedMonthLabel}の登録件数: <span className="font-bold text-slate-700">{selectedMonthTransactions.length}件</span>
+              </p>
             </div>
             <button
               type="button"
@@ -714,7 +739,11 @@ export default function Home() {
                 <YAxis hide />
                 <Tooltip
                   formatter={(value, name) => [`¥${Number(value).toLocaleString()}`, name === 'income' ? '収入' : '支出']}
-                  contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0', borderRadius: '12px' }}
+                  cursor={false}
+                  allowEscapeViewBox={{ x: true, y: true }}
+                  position={{ y: -8 }}
+                  wrapperStyle={{ zIndex: 10, pointerEvents: 'none' }}
+                  contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0', borderRadius: '12px', boxShadow: '0 4px 12px rgba(15, 23, 42, 0.08)' }}
                 />
                 <Bar dataKey="income" name="収入" fill="#10b981" radius={[5, 5, 0, 0]} maxBarSize={42} />
                 <Bar dataKey="expense" name="支出" fill="#f43f5e" radius={[5, 5, 0, 0]} maxBarSize={42} />
@@ -782,6 +811,8 @@ export default function Home() {
                     ))}
                   </Pie>
                   <Tooltip
+                    allowEscapeViewBox={{ x: true, y: true }}
+                    wrapperStyle={{ zIndex: 10, pointerEvents: 'none' }}
                     contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
                   />
                 </PieChart>
@@ -845,6 +876,10 @@ export default function Home() {
                     <Tooltip
                       formatter={(value, name) => [`¥${Number(value).toLocaleString()}`, name === 'income' ? '収入' : '支出']}
                       labelFormatter={(label) => `${label}`}
+                      cursor={false}
+                      allowEscapeViewBox={{ x: true, y: true }}
+                      position={{ y: -8 }}
+                      wrapperStyle={{ zIndex: 10, pointerEvents: 'none' }}
                       contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
                     />
                     <Legend
