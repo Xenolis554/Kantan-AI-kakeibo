@@ -5,10 +5,11 @@ export const config = {
   api: { bodyParser: { sizeLimit: '10mb' } },
 };
 
-const DAILY_PARSE_LIMIT = 10;
 const MAX_RETRIES = 1;
+const REQUEST_COOLDOWN_MS = 10_000;
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite';
 const FALLBACK_MODEL = 'gemini-flash-lite-latest';
+const lastParseRequests = new Map();
 
 const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
@@ -68,29 +69,23 @@ export default async function handler(req, res) {
       const { data: { user }, error: userError } = await supabase.auth.getUser(accessToken);
       if (userError || !user) return res.status(401).json({ error: '認証情報が無効です。' });
 
-      const usageDate = new Date().toISOString().slice(0, 10);
       const { imageBase64, mimeType } = req.body || {};
       if (!imageBase64) {
         return res.status(400).json({ error: '画像データが送信されていません。' });
       }
 
-      const { data: usageAccepted, error: usageError } = await supabase.rpc(
-        'consume_receipt_parse_quota',
-        {
-          p_user_id: user.id,
-          p_usage_date: usageDate,
-          p_daily_limit: DAILY_PARSE_LIMIT,
-        }
-      );
-      if (usageError) {
-        console.error('Receipt parse usage error:', usageError);
-        return res.status(500).json({ error: '利用上限を確認できませんでした。' });
-      }
-      if (!usageAccepted) {
+      const now = Date.now();
+      const lastRequestAt = lastParseRequests.get(user.id) || 0;
+      if (now - lastRequestAt < REQUEST_COOLDOWN_MS) {
+        const retryAfterSeconds = Math.ceil(
+          (REQUEST_COOLDOWN_MS - (now - lastRequestAt)) / 1000
+        );
+        res.setHeader('Retry-After', String(retryAfterSeconds));
         return res.status(429).json({
-          error: `本日の画像解析上限（${DAILY_PARSE_LIMIT}回）に達しました。明日もう一度お試しください。`,
+          error: `連続解析を防止するため、${retryAfterSeconds}秒後にもう一度お試しください。`,
         });
       }
+      lastParseRequests.set(user.id, now);
 
       const ai = new GoogleGenAI({ apiKey });
     const models = GEMINI_MODEL === FALLBACK_MODEL
