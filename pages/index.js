@@ -2,69 +2,22 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { useRouter } from 'next/router';
 import {
+  CHART_COLORS,
+  DAILY_MESSAGES,
+  EXPENSE_CATEGORIES,
+  INCOME_CATEGORIES,
+} from '../lib/dashboardConstants';
+import { formatDateKey, getCurrentMonth, getWeatherInfo } from '../lib/dashboardUtils';
+import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend, CartesianGrid
 } from 'recharts';
 import {
   Upload, Plus, LogOut, FileText, Calendar, DollarSign, Tag, Trash2,
   ArrowUpRight, ArrowDownRight, ShoppingBag, Utensils, Car, Zap,
   Briefcase, HelpCircle, Sparkles, X, CheckCircle2, ChevronRight, ChevronLeft, PiggyBank,
-  MapPin, CloudSun, CloudRain, Sun, Cloud, Loader2
+  MapPin, Loader2
   , Settings, User, Mail, KeyRound, AlertTriangle
 } from 'lucide-react';
-
-const EXPENSE_CATEGORIES = [
-  '食費',
-  '日用品',
-  '衣類・ファッション',
-  '住居費',
-  '水道光熱費',
-  '通信費',
-  '交通費',
-  '医療費',
-  '保険',
-  '教育・学習',
-  '娯楽・レジャー',
-  '美容・理容',
-  '交際費',
-  '税金・社会保険',
-  'サブスクリプション',
-  '手数料',
-  'その他',
-];
-
-const INCOME_CATEGORIES = ['給与・収入', '賞与', '副業収入', '臨時収入', 'その他収入'];
-
-const formatDateKey = (value) => {
-  const date = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return { key: value, label: value };
-  return { date, key: value, label: `${date.getMonth() + 1}/${date.getDate()}` };
-};
-
-const getCurrentMonth = () => {
-  const date = new Date();
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-};
-
-const DAILY_MESSAGES = [
-  '今日も無理なく、できることから始めましょう。',
-  '小さな記録が、ゆとりのある毎日につながります。',
-  '今日の家計も、やさしく見える化していきましょう。',
-  '頑張りすぎず、楽しみながら家計簿を続けましょう。',
-  'ひとつ記録できたら、それだけで十分です。',
-];
-
-const getWeatherInfo = (weatherCode) => {
-  if (weatherCode === 0) return { label: '快晴', Icon: Sun, color: 'text-amber-500' };
-  if ([1, 2].includes(weatherCode)) return { label: '晴れ時々くもり', Icon: CloudSun, color: 'text-amber-500' };
-  if (weatherCode === 3) return { label: 'くもり', Icon: Cloud, color: 'text-slate-500' };
-  if ([45, 48].includes(weatherCode)) return { label: '霧', Icon: Cloud, color: 'text-slate-500' };
-  if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82].includes(weatherCode)) {
-    return { label: '雨', Icon: CloudRain, color: 'text-sky-500' };
-  }
-  if ([71, 73, 75, 77, 85, 86].includes(weatherCode)) return { label: '雪', Icon: Cloud, color: 'text-sky-400' };
-  if ([95, 96, 99].includes(weatherCode)) return { label: '雷雨', Icon: CloudRain, color: 'text-indigo-500' };
-  return { label: '天気情報なし', Icon: Cloud, color: 'text-slate-400' };
-};
 
 export default function Home() {
   const [user, setUser] = useState(null);
@@ -545,21 +498,6 @@ export default function Home() {
     setTransactionPage(1);
   };
 
-  const COLORS = [
-    '#2563eb',
-    '#16a34a',
-    '#f59e0b',
-    '#ef4444',
-    '#8b5cf6',
-    '#ec4899',
-    '#06b6d4',
-    '#f97316',
-    '#14b8a6',
-    '#6366f1',
-    '#84cc16',
-    '#e11d48',
-  ];
-
   // カテゴリ用アイコンマッピング
   const getCategoryIcon = (category) => {
     switch (category) {
@@ -807,7 +745,7 @@ export default function Home() {
                 <PieChart>
                   <Pie data={categoryData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={85} paddingAngle={2}>
                     {categoryData.map((_, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
                     ))}
                   </Pie>
                   <Tooltip
@@ -825,7 +763,7 @@ export default function Home() {
                     <span className="flex items-center gap-2 text-slate-600 min-w-0">
                       <span
                         className="w-2.5 h-2.5 rounded-full shrink-0"
-                        style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                        style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}
                       />
                       <span className="truncate">{category.name}</span>
                     </span>
