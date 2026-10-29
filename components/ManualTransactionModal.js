@@ -1,4 +1,5 @@
 import { X } from 'lucide-react';
+import { useState } from 'react';
 
 export default function ManualTransactionModal({
   form,
@@ -8,15 +9,21 @@ export default function ManualTransactionModal({
   onSubmit,
   onClose,
 }) {
+  const [closing, setClosing] = useState(false);
+  const closeModal = () => {
+    if (closing) return;
+    setClosing(true);
+    window.setTimeout(onClose, 220);
+  };
   const update = (field, value) => onChange({ ...form, [field]: value });
 
   return (
-    <div className="fixed inset-0 overflow-y-auto bg-slate-900/40 backdrop-blur-sm p-4 z-50">
+    <div className="motion-backdrop fixed inset-0 overflow-y-auto bg-slate-900/40 backdrop-blur-sm p-4 z-50" onClick={closeModal}>
       <div className="min-h-full flex items-center justify-center">
-        <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-2xl relative space-y-4">
+        <div className={`motion-panel ${closing ? 'motion-panel-closing' : ''} bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-2xl relative space-y-4`} onClick={(event) => event.stopPropagation()}>
           <div className="flex justify-between items-center">
             <h3 className="text-base font-bold text-slate-900">手動でデータを追加</h3>
-            <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600" aria-label="手動入力を閉じる"><X size={18} /></button>
+            <button type="button" onClick={closeModal} disabled={closing} className="text-slate-400 hover:text-slate-600 disabled:opacity-50" aria-label="手動入力を閉じる"><X size={18} /></button>
           </div>
 
           <form onSubmit={onSubmit} className="space-y-3 text-xs">
@@ -49,7 +56,7 @@ export default function ManualTransactionModal({
               <input type="date" value={form.transaction_date} onChange={(event) => update('transaction_date', event.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:bg-white focus:ring-2 focus:ring-slate-900" />
             </div>
             <div className="pt-2 flex justify-end gap-2">
-              <button type="button" onClick={onClose} className="px-4 py-2 border border-slate-200 font-medium rounded-xl hover:bg-slate-50">キャンセル</button>
+              <button type="button" onClick={closeModal} disabled={closing} className="px-4 py-2 border border-slate-200 font-medium rounded-xl hover:bg-slate-50 disabled:opacity-50">キャンセル</button>
               <button type="submit" className="px-4 py-2 bg-slate-900 text-white font-semibold rounded-xl hover:bg-slate-800">追加する</button>
             </div>
           </form>

@@ -1,19 +1,36 @@
-import { Loader2, Sparkles, Upload, X } from 'lucide-react';
+import { CheckCircle2, ChevronDown, ChevronUp, Loader2, Sparkles, Upload, X } from 'lucide-react';
+import { useState } from 'react';
 
 export default function ReceiptScanModal({
   previewUrl,
   scanLoading,
   scanStatus,
   scanError,
+  scanSuccess,
+  scanResult,
   selectedFile,
   onFileChange,
   onSubmit,
   onClose,
 }) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const closeModal = () => {
+    if (scanLoading || closing) return;
+    setClosing(true);
+    window.setTimeout(onClose, 220);
+  };
+
   return (
-    <div className="fixed inset-0 overflow-y-auto bg-slate-900/40 backdrop-blur-sm p-4 z-50">
+    <div
+      className="motion-backdrop fixed inset-0 overflow-y-auto bg-slate-900/40 backdrop-blur-sm p-4 z-50"
+      onClick={closeModal}
+    >
       <div className="min-h-full flex items-center justify-center">
-        <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-2xl relative space-y-5">
+        <div
+          className={`motion-panel ${closing ? 'motion-panel-closing' : ''} bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-2xl relative space-y-5`}
+          onClick={(event) => event.stopPropagation()}
+        >
           <div className="flex justify-between items-start">
             <div>
               <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
@@ -21,7 +38,7 @@ export default function ReceiptScanModal({
               </h3>
               <p className="text-xs text-slate-500 mt-1">レシート、公共料金、給料明細の画像をアップロード</p>
             </div>
-            <button type="button" onClick={onClose} disabled={scanLoading} className="text-slate-400 hover:text-slate-600 disabled:opacity-50" aria-label="AIスキャンを閉じる">
+            <button type="button" onClick={closeModal} disabled={scanLoading || closing} className="text-slate-400 hover:text-slate-600 disabled:opacity-50" aria-label="AIスキャンを閉じる">
               <X size={18} />
             </button>
           </div>
@@ -56,9 +73,41 @@ export default function ReceiptScanModal({
             </div>
           )}
 
+          {scanSuccess && !scanLoading && (
+            <div className="scan-complete-animation rounded-2xl border border-emerald-200 bg-emerald-50 p-5" role="status" aria-live="polite">
+              <div className="mb-4 flex items-center justify-center gap-2 text-emerald-700">
+                <div className="scan-complete-icon flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500 text-white">
+                  <CheckCircle2 size={24} strokeWidth={2.5} />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-emerald-900">登録が完了しました</p>
+                  <p className="text-xs text-emerald-700">{scanResult?.merchant || '取引'}・{Number(scanResult?.amount || 0).toLocaleString()}円</p>
+                </div>
+              </div>
+              {scanResult && (
+                <>
+                  <button type="button" onClick={() => setDetailsOpen((current) => !current)} className="flex w-full items-center justify-center gap-1 border-t border-emerald-200 pt-3 text-xs font-semibold text-emerald-700 hover:text-emerald-950" aria-expanded={detailsOpen}>
+                    {detailsOpen ? '詳細を閉じる' : '詳細を表示'}
+                    {detailsOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                  </button>
+                  <div className={`scan-details ${detailsOpen ? 'scan-details-open' : ''}`}>
+                    <dl className="space-y-2 pt-4 text-xs">
+                      <div className="flex justify-between gap-4"><dt className="text-emerald-700/70">店舗 / 発行元</dt><dd className="font-medium text-emerald-950">{scanResult.merchant || '-'}</dd></div>
+                      <div className="flex justify-between gap-4"><dt className="text-emerald-700/70">金額</dt><dd className="font-mono font-bold text-emerald-950">{scanResult.type === 'income' ? '+' : '-'}¥{Number(scanResult.amount).toLocaleString()}</dd></div>
+                      <div className="flex justify-between gap-4"><dt className="text-emerald-700/70">種別</dt><dd className="font-medium text-emerald-950">{scanResult.type === 'income' ? '収入' : '支出'}</dd></div>
+                      <div className="flex justify-between gap-4"><dt className="text-emerald-700/70">カテゴリ</dt><dd className="font-medium text-emerald-950">{scanResult.category}</dd></div>
+                      <div className="flex justify-between gap-4"><dt className="text-emerald-700/70">取引日</dt><dd className="font-medium text-emerald-950">{scanResult.transaction_date}</dd></div>
+                      <div className="flex justify-between gap-4"><dt className="text-emerald-700/70">購入時刻</dt><dd className="font-medium text-emerald-950">{scanResult.purchase_time || '記載なし'}</dd></div>
+                    </dl>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           <div className="flex justify-end gap-2 pt-2">
-            <button type="button" onClick={onClose} disabled={scanLoading} className="px-4 py-2 border border-slate-200 text-xs font-medium rounded-xl hover:bg-slate-50 disabled:opacity-50">キャンセル</button>
-            <button type="button" onClick={onSubmit} disabled={scanLoading || !selectedFile} className="px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-xl hover:bg-slate-800 disabled:opacity-50 flex items-center gap-1.5">
+            <button type="button" onClick={closeModal} disabled={scanLoading || closing} className="px-4 py-2 border border-slate-200 text-xs font-medium rounded-xl hover:bg-slate-50 disabled:opacity-50">キャンセル</button>
+            <button type="button" onClick={onSubmit} disabled={scanLoading || !selectedFile || Boolean(scanSuccess)} className="px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-xl hover:bg-slate-800 disabled:opacity-50 flex items-center gap-1.5">
               {scanLoading && <Loader2 size={14} className="animate-spin" />}
               {scanLoading ? '解析中...' : '解析して保存'}
             </button>

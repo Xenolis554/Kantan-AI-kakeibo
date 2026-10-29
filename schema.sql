@@ -5,9 +5,14 @@ create table if not exists public.transactions (
   category text not null,
   amount numeric(12, 2) not null check (amount >= 0),
   merchant text,
+  memo text,
+  purchase_time time,
   transaction_date date not null,
   created_at timestamptz not null default now()
 );
+
+alter table public.transactions add column if not exists memo text;
+alter table public.transactions add column if not exists purchase_time time;
 
 create table if not exists public.transaction_items (
   id uuid primary key default gen_random_uuid(),
@@ -16,6 +21,9 @@ create table if not exists public.transaction_items (
   amount numeric(12, 2) not null check (amount >= 0),
   created_at timestamptz not null default now()
 );
+
+create index if not exists transactions_user_date_idx
+  on public.transactions (user_id, transaction_date desc);
 
 alter table public.transactions enable row level security;
 alter table public.transaction_items enable row level security;

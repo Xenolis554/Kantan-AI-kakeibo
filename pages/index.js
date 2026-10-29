@@ -16,8 +16,9 @@ import TransactionsTable from '../components/TransactionsTable';
 import ReceiptScanModal from '../components/ReceiptScanModal';
 import ManualTransactionModal from '../components/ManualTransactionModal';
 import {
-  Plus, LogOut, ShoppingBag, Utensils, Car, Zap,
-  Briefcase, HelpCircle, Sparkles, X, CheckCircle2, PiggyBank,
+  Plus, LogOut, ShoppingBag, Utensils, Car, Zap, Shirt, Home as HomeIcon,
+  Smartphone, Stethoscope, ShieldCheck, GraduationCap, Film,
+  Scissors, Users, Landmark, Repeat, Receipt, Briefcase, Sparkles, X, PiggyBank,
   Settings, User, Mail, KeyRound, AlertTriangle
 } from 'lucide-react';
 
@@ -29,6 +30,12 @@ export default function Home() {
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonth);
   const [transactionPage, setTransactionPage] = useState(1);
   const [transactionsPerPage, setTransactionsPerPage] = useState(10);
+  const [transactionFilters, setTransactionFilters] = useState({
+    type: 'all',
+    category: 'all',
+    date: '',
+  });
+  const [transactionSort, setTransactionSort] = useState('transaction_date_desc');
   const [weather, setWeather] = useState({ status: 'loading', temperature: null, code: null });
   const [dailyMessage] = useState(
     () => DAILY_MESSAGES[Math.floor(Math.random() * DAILY_MESSAGES.length)]
@@ -38,6 +45,7 @@ export default function Home() {
   const [isScanOpen, setIsScanOpen] = useState(false);
   const [isManualOpen, setIsManualOpen] = useState(false);
   const [isAccountOpen, setIsAccountOpen] = useState(false);
+  const [accountClosing, setAccountClosing] = useState(false);
   const [accountLoading, setAccountLoading] = useState(false);
   const [accountError, setAccountError] = useState('');
   const [accountSuccess, setAccountSuccess] = useState('');
@@ -53,8 +61,18 @@ export default function Home() {
   const [scanStatus, setScanStatus] = useState('');
   const [scanError, setScanError] = useState('');
   const [scanSuccess, setScanSuccess] = useState('');
+  const [scanResult, setScanResult] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
+
+  const closeAccountSettings = () => {
+    if (accountClosing) return;
+    setAccountClosing(true);
+    window.setTimeout(() => {
+      setIsAccountOpen(false);
+      setAccountClosing(false);
+    }, 220);
+  };
 
   // 手動入力フォーム state
   const [manualForm, setManualForm] = useState({
@@ -126,7 +144,7 @@ export default function Home() {
 
   useEffect(() => {
     setTransactionPage(1);
-  }, [selectedMonth, transactionsPerPage]);
+  }, [selectedMonth, transactionsPerPage, transactionFilters, transactionSort]);
 
   const checkUser = async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -144,17 +162,18 @@ export default function Home() {
     }
   };
 
-  const fetchTransactions = async (userId) => {
-    setLoading(true);
+  const fetchTransactions = async (userId, showLoading = true) => {
+    if (showLoading) setLoading(true);
     const { data, error } = await supabase
       .from('transactions')
-      .select('*, transaction_items(*)')
+      .select('id, type, category, amount, merchant, memo, purchase_time, transaction_date, created_at')
       .eq('user_id', userId)
       .order('transaction_date', { ascending: false });
 
     if (error) console.error(error);
     else setTransactions(data || []);
-    setLoading(false);
+    if (showLoading) setLoading(false);
+    return { data, error };
   };
 
   const handleLogout = async () => {
@@ -264,9 +283,12 @@ export default function Home() {
     const file = e.target.files[0];
     if (file) {
       setScanError('');
+      setScanSuccess('');
+      setScanResult(null);
       setSelectedFile(file);
       setPreviewUrl(URL.createObjectURL(file));
     }
+    e.target.value = '';
   };
 
   const handleScanSubmit = async () => {
@@ -335,6 +357,12 @@ export default function Home() {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(parsed.transaction_date)) {
         throw new Error('AIが読み取った日付の形式が正しくありません。');
       }
+      if (
+        parsed.purchase_time !== null
+        && !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(parsed.purchase_time)
+      ) {
+        throw new Error('AIが読み取った購入時刻の形式が正しくありません。');
+      }
       setScanStatus('解析結果を保存しています...');
       const { data: insertedTx, error: txError } = await supabase
         .from('transactions')
@@ -344,12 +372,26 @@ export default function Home() {
           category: parsed.category,
           amount: parsed.amount,
           merchant: parsed.merchant,
+          purchase_time: parsed.purchase_time,
           transaction_date: parsed.transaction_date,
         }])
         .select()
         .single();
 
       if (txError) throw txError;
+
+      setTransactions((current) => [{
+        id: insertedTx.id,
+        type: parsed.type,
+        category: parsed.category,
+        amount: parsed.amount,
+        merchant: parsed.merchant,
+        purchase_time: parsed.purchase_time,
+        transaction_date: parsed.transaction_date,
+        memo: null,
+        created_at: insertedTx.created_at || new Date().toISOString(),
+      }, ...current]);
+      setSelectedMonth(parsed.transaction_date.slice(0, 7));
 
       if (parsed.items && parsed.items.length > 0) {
         const itemsToInsert = parsed.items.map((item) => ({
@@ -363,12 +405,19 @@ export default function Home() {
         if (itemsError) throw itemsError;
       }
 
-      setIsScanOpen(false);
       setSelectedFile(null);
       setPreviewUrl(null);
       setScanStatus('');
+      setScanResult({
+        ...parsed,
+        id: insertedTx.id,
+        created_at: insertedTx.created_at || new Date().toISOString(),
+      });
       setScanSuccess(`${parsed.merchant}の${Number(parsed.amount).toLocaleString()}円を登録しました。`);
-      await fetchTransactions(user.id);
+      const { error: refreshError } = await fetchTransactions(user.id, false);
+      if (refreshError) {
+        console.error('登録後の取引履歴更新に失敗しました。', refreshError);
+      }
     } catch (err) {
       setScanError(
         err?.name === 'AbortError'
@@ -419,12 +468,37 @@ export default function Home() {
     fetchTransactions(user.id);
   };
 
+  const handleTransactionUpdate = async (id, updates) => {
+    const { error } = await supabase
+      .from('transactions')
+      .update(updates)
+      .eq('id', id)
+      .eq('user_id', user.id);
+
+    if (error) throw error;
+    await fetchTransactions(user.id, false);
+  };
+
   const selectedMonthTransactions = transactions.filter((transaction) =>
     typeof transaction.transaction_date === 'string'
       && transaction.transaction_date.startsWith(selectedMonth)
   );
-  const transactionPageCount = Math.max(1, Math.ceil(selectedMonthTransactions.length / transactionsPerPage));
-  const visibleTransactions = selectedMonthTransactions.slice(
+  const filteredTransactions = selectedMonthTransactions.filter((transaction) => (
+    (transactionFilters.type === 'all' || transaction.type === transactionFilters.type)
+    && (transactionFilters.category === 'all' || transaction.category === transactionFilters.category)
+    && (!transactionFilters.date || transaction.transaction_date === transactionFilters.date)
+  ));
+  const sortField = transactionSort.startsWith('created_at') ? 'created' : 'transaction';
+  const sortDirection = transactionSort.endsWith('_asc') ? 'asc' : 'desc';
+  const sortedTransactions = [...filteredTransactions].sort((a, b) => {
+    const aValue = sortField === 'created' ? a.created_at || '' : a.transaction_date || '';
+    const bValue = sortField === 'created' ? b.created_at || '' : b.transaction_date || '';
+    return sortDirection === 'asc'
+      ? aValue.localeCompare(bValue)
+      : bValue.localeCompare(aValue);
+  });
+  const transactionPageCount = Math.max(1, Math.ceil(sortedTransactions.length / transactionsPerPage));
+  const visibleTransactions = sortedTransactions.slice(
     (transactionPage - 1) * transactionsPerPage,
     transactionPage * transactionsPerPage
   );
@@ -504,10 +578,28 @@ export default function Home() {
     switch (category) {
       case '食費': return <Utensils size={14} />;
       case '日用品': return <ShoppingBag size={14} />;
-      case '交通費': return <Car size={14} />;
+      case '衣類・ファッション': return <Shirt size={14} />;
+      case '住居費': return <HomeIcon size={14} />;
+      case '水道光熱費':
       case '光熱費・公共料金': return <Zap size={14} />;
+      case '通信費': return <Smartphone size={14} />;
+      case '交通費': return <Car size={14} />;
+      case '医療費': return <Stethoscope size={14} />;
+      case '保険': return <ShieldCheck size={14} />;
+      case '教育・学習': return <GraduationCap size={14} />;
+      case '娯楽・レジャー': return <Film size={14} />;
+      case '美容・理容': return <Scissors size={14} />;
+      case '交際費': return <Users size={14} />;
+      case '税金・社会保険': return <Landmark size={14} />;
+      case 'サブスクリプション': return <Repeat size={14} />;
+      case '手数料': return <Receipt size={14} />;
       case '給与・収入': return <Briefcase size={14} />;
-      default: return <HelpCircle size={14} />;
+      case '賞与':
+      case '副業収入':
+      case '臨時収入':
+      case 'その他収入':
+      case 'その他':
+      default: return <Receipt size={14} />;
     }
   };
 
@@ -551,7 +643,7 @@ export default function Home() {
               setDeletePassword('');
               setIsAccountOpen(true);
             }}
-            className="w-full mb-4 border border-slate-200 text-slate-600 font-medium py-3 px-4 rounded-xl flex items-center justify-center gap-2 hover:bg-slate-50 transition-all text-sm"
+            className="motion-action w-full mb-4 border border-slate-200 text-slate-600 font-medium py-3 px-4 rounded-xl flex items-center justify-center gap-2 hover:bg-slate-50 transition-all text-sm"
           >
             <Settings size={15} /> アカウント設定
           </button>
@@ -559,15 +651,20 @@ export default function Home() {
           <nav className="space-y-2.5">
             <button
               type="button"
-              onClick={() => setIsScanOpen(true)}
-              className="w-full bg-slate-900 text-white font-medium py-3 px-4 rounded-xl flex items-center justify-center gap-2 hover:bg-slate-800 transition-all shadow-sm hover:shadow text-sm"
+              onClick={() => {
+                setScanSuccess('');
+                setScanError('');
+                setScanResult(null);
+                setIsScanOpen(true);
+              }}
+              className="motion-action w-full bg-slate-900 text-white font-medium py-3 px-4 rounded-xl flex items-center justify-center gap-2 hover:bg-slate-800 transition-all shadow-sm hover:shadow text-sm"
             >
               <Sparkles size={15} /> AIスキャン登録
             </button>
             <button
               type="button"
               onClick={() => setIsManualOpen(true)}
-              className="w-full bg-white border border-slate-200 text-slate-700 font-medium py-3 px-4 rounded-xl flex items-center justify-center gap-2 hover:bg-slate-50 transition-all text-sm"
+              className="motion-action w-full bg-white border border-slate-200 text-slate-700 font-medium py-3 px-4 rounded-xl flex items-center justify-center gap-2 hover:bg-slate-50 transition-all text-sm"
             >
               <Plus size={15} /> 手動で入力
             </button>
@@ -584,12 +681,6 @@ export default function Home() {
 
       {/* メインエリア */}
       <main className="flex-1 p-6 sm:p-8 md:p-10 space-y-8 overflow-y-auto max-w-7xl mx-auto w-full">
-        {scanSuccess && (
-          <div role="status" className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
-            <CheckCircle2 size={17} />
-            {scanSuccess}
-          </div>
-        )}
         <WeatherBanner
           todayLabel={todayLabel}
           dailyMessage={dailyMessage}
@@ -624,14 +715,21 @@ export default function Home() {
 
         <TransactionsTable
           transactions={visibleTransactions}
-          totalCount={selectedMonthTransactions.length}
+          totalCount={sortedTransactions.length}
           page={transactionPage}
           pageCount={transactionPageCount}
           perPage={transactionsPerPage}
           onPageChange={setTransactionPage}
           onPerPageChange={setTransactionsPerPage}
           onDelete={handleDelete}
+          onUpdate={handleTransactionUpdate}
+          filters={transactionFilters}
+          onFiltersChange={setTransactionFilters}
+          sortOrder={transactionSort}
+          onSortOrderChange={setTransactionSort}
           getCategoryIcon={getCategoryIcon}
+          expenseCategories={EXPENSE_CATEGORIES}
+          incomeCategories={INCOME_CATEGORIES}
         />
       </main>
 
@@ -641,10 +739,16 @@ export default function Home() {
           scanLoading={scanLoading}
           scanStatus={scanStatus}
           scanError={scanError}
+          scanSuccess={scanSuccess}
+          scanResult={scanResult}
           selectedFile={selectedFile}
           onFileChange={handleFileChange}
           onSubmit={handleScanSubmit}
-          onClose={() => setIsScanOpen(false)}
+          onClose={() => {
+            setIsScanOpen(false);
+            setScanSuccess('');
+            setScanResult(null);
+          }}
         />
       )}
 
@@ -660,14 +764,14 @@ export default function Home() {
       )}
 
       {isAccountOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto">
+        <div className="motion-backdrop fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className={`motion-panel ${accountClosing ? 'motion-panel-closing' : ''} bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto`}>
             <div className="p-6 border-b border-slate-100 flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-bold text-slate-900">アカウント設定</h2>
                 <p className="text-xs text-slate-400 mt-1">登録情報とログイン情報を変更できます。</p>
               </div>
-              <button type="button" onClick={() => setIsAccountOpen(false)} className="p-2 hover:bg-slate-100 rounded-full">
+              <button type="button" onClick={closeAccountSettings} disabled={accountClosing} className="p-2 hover:bg-slate-100 rounded-full disabled:opacity-50">
                 <X size={18} />
               </button>
             </div>

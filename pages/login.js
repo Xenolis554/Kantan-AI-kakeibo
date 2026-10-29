@@ -17,17 +17,41 @@ export default function Login() {
   const router = useRouter();
 
   const getAuthErrorMessage = (error) => {
-    const message = error instanceof Error ? error.message : '';
+    const message = typeof error?.message === 'string' ? error.message : '';
+    const normalizedMessage = message.toLowerCase();
 
-    if (message.toLowerCase().includes('email rate limit exceeded')) {
+    if (normalizedMessage.includes('invalid login credentials')) {
+      return 'メールアドレスまたはパスワードが正しくありません。入力内容をご確認ください。';
+    }
+
+    if (
+      normalizedMessage.includes('email not confirmed')
+      || normalizedMessage.includes('email_not_confirmed')
+    ) {
+      return 'メールアドレスの確認が完了していません。受信した確認メールのリンクをクリックしてから、もう一度お試しください。';
+    }
+
+    if (normalizedMessage.includes('failed to fetch')) {
+      return '認証サーバーに接続できませんでした。インターネット接続とSupabaseの設定を確認してください。';
+    }
+
+    if (normalizedMessage.includes('user already registered')) {
+      return 'このメールアドレスはすでに登録されています。ログインしてください。';
+    }
+
+    if (normalizedMessage.includes('password should be at least')) {
+      return 'パスワードは6文字以上で入力してください。';
+    }
+
+    if (normalizedMessage.includes('email rate limit exceeded')) {
       return '確認メールの送信回数が上限に達しています。しばらく時間をおいてから、同じメールアドレスで再度お試しください。迷惑メールフォルダもご確認ください。';
     }
 
-    if (message.toLowerCase().includes('error sending confirmation email')) {
+    if (normalizedMessage.includes('error sending confirmation email')) {
       return '確認メールを送信できませんでした。Supabaseのメール設定または送信先アドレスを確認して、時間をおいてから再度お試しください。';
     }
 
-    return message || '認証処理に失敗しました。入力内容をご確認ください。';
+    return '認証処理に失敗しました。入力内容をご確認ください。';
   };
 
   useEffect(() => {
